@@ -1,4 +1,3 @@
 [submodule "RIOT"]
 	path = RIOT
-	url = https://github.com/bosmoment/RIOT.git
-	branch = work/pinetime
+	url = https://github.com/j-devel/RIOT
