@@ -7,7 +7,9 @@
  */
 #include <stdint.h>
 #include "face_sports.h"
-#include "hal.h"
+#ifndef USE_BOARD_NATIVE
+  #include "hal.h"
+#endif
 #include "log.h"
 #include "lvgl.h"
 #include "gui.h"

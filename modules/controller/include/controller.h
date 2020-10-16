@@ -11,7 +11,9 @@
 
 #include <stdint.h>
 #include "event.h"
-#include "hal.h"
+#ifndef USE_BOARD_NATIVE
+  #include "hal.h"
+#endif
 #include "gui.h"
 #include "widget.h"
 #include "controller/structs.h"
@@ -65,7 +67,9 @@ typedef struct {
 #endif
     control_event_handler_t *handlers;
     kernel_pid_t pid;
+#ifndef USE_BOARD_NATIVE
     hal_reset_reason_t reset_reason;    /**< Current reset reason */
+#endif
     size_t face_idx;
 } controller_t;
 
@@ -83,7 +87,11 @@ void controller_add_control_handler(controller_t *controller,
                                     control_event_handler_t *handler);
 
 const controller_time_spec_t *controller_time_get_time(controller_t *controller);
+#ifdef USE_BOARD_NATIVE
+void controller_update_time_native(controller_t *controller);
+#else
 void controller_update_time(controller_t *controller);
+#endif
 void controller_time_set_time(controller_t *controller, controller_time_spec_t *time);
 
 int controller_thread_create(void);

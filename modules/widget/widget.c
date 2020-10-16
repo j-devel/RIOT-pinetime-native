@@ -6,9 +6,12 @@
  * directory for more details.
  */
 
+#include <stdio.h> // @@
+
 #include "widget.h"
 #include "widget_conf.h"
 #include "mutex.h"
+
 
 widget_t *widget_get_home(void)
 {
@@ -53,10 +56,15 @@ void widget_init_local(widget_t *widget)
 void widget_init_installed(void)
 {
     widget_init(CONFIG_WIDGET_MENU);
+    printf("@@ widget_init_installed(): after widget_init(CONFIG_WIDGET_MENU);\n");
+    printf("@@ ARRAY_SIZE(widgets_installed): %u\n", (unsigned int)ARRAY_SIZE(widgets_installed));
+    printf("@@ ARRAY_SIZE(widget_faces_installed): %u\n", (unsigned int)ARRAY_SIZE(widget_faces_installed));
     for (size_t i = 0; i < ARRAY_SIZE(widgets_installed); i++) {
+        printf("@@ widget: %p\n", widgets_installed[i]);
         widget_init(widgets_installed[i]);
     }
     for (size_t i = 0; i < ARRAY_SIZE(widget_faces_installed); i++) {
+        printf("@@ widget_face: %p\n", widget_faces_installed[i]);
         widget_init(widget_faces_installed[i]);
     }
 }
@@ -88,6 +96,7 @@ void widget_release_control_lock(widget_t *widget)
 
 int widget_face_gui_event(widget_t *widget, int event)
 {
+    // printf("@@ [widget] widget_face_gui_event(): widget: %p\n", widget);
     switch (event) {
         case GUI_EVENT_GESTURE_UP:
             /* Next widget */

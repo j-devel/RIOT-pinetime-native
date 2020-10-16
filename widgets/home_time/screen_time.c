@@ -8,14 +8,18 @@
 
 #include <stdint.h>
 #include "home_time.h"
-#include "hal.h"
+#ifndef USE_BOARD_NATIVE
+  #include "hal.h"
+#endif
 #include "log.h"
 #include "lvgl.h"
 #include "gui.h"
 #include "gui/theme.h"
 #include "controller.h"
 #include "kernel_defines.h"
-#include "bleman.h"
+#ifndef USE_BOARD_NATIVE
+  #include "bleman.h"
+#endif
 #include "fonts/noto_sans_numeric_80.h"
 
 static const widget_spec_t home_time_spec;
@@ -33,12 +37,14 @@ home_time_widget_t home_time_widget = {
     .widget = {.spec = &home_time_spec }
 };
 
+#ifndef USE_BOARD_NATIVE
 static const char *_state2color[] = {
     [BLEMAN_BLE_STATE_INACTIVE] = "#000000",
     [BLEMAN_BLE_STATE_DISCONNECTED] = GUI_COLOR_LBL_BASIC_RED,
     [BLEMAN_BLE_STATE_ADVERTISING] = GUI_COLOR_LBL_BASIC_BLUE,
     [BLEMAN_BLE_STATE_CONNECTED] = GUI_COLOR_LBL_DARK_GREEN,
 };
+#endif
 
 static inline home_time_widget_t *_from_widget(widget_t *widget)
 {
@@ -117,7 +123,10 @@ lv_obj_t *screen_time_create(home_time_widget_t *ht)
 
 static void _home_time_set_bt_label(home_time_widget_t *htwidget)
 {
-
+#ifdef USE_BOARD_NATIVE
+    lv_label_set_text_fmt(htwidget->lv_ble,
+        "%s "LV_SYMBOL_BLUETOOTH"#", "#000000");
+#else
     if (htwidget->ble_state == BLEMAN_BLE_STATE_DISCONNECTED ) {
         lv_label_set_text(htwidget->lv_ble, "");
     }
@@ -127,12 +136,18 @@ static void _home_time_set_bt_label(home_time_widget_t *htwidget)
                               "%s "LV_SYMBOL_BLUETOOTH"#",
                               color);
     }
+#endif
 }
 
 static void _home_time_set_power_label(home_time_widget_t *htwidget)
 {
     const char *color = battery_mid_color;
+#ifdef USE_BOARD_NATIVE
+    unsigned percentage = 100;
+#else
     unsigned percentage = hal_battery_get_percentage(htwidget->millivolts);
+#endif
+
     if (percentage <= battery_low) {
         color = battery_low_color;
     }
@@ -239,13 +254,16 @@ int home_time_close(widget_t *widget)
 
 static void _update_power_stats(home_time_widget_t *htwidget)
 {
+#ifndef USE_BOARD_NATIVE
     htwidget->powered = hal_battery_is_powered();
     htwidget->charging = hal_battery_is_charging();
+#endif
     htwidget->millivolts = controller_get_battery_voltage(controller_get());
 }
 
 int home_time_event(widget_t *widget, controller_event_t event)
 {
+    LOG_INFO("@@ home_time_event(): called!!\n");
     home_time_widget_t *htwidget = _from_widget(widget);
     widget_get_control_lock(widget);
     if (event == CONTROLLER_EVENT_TICK) {

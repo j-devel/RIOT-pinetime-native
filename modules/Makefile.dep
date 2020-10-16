@@ -3,6 +3,9 @@ ifneq (,$(filter gui,$(USEMODULE)))
   USEPKG += lvgl
   USEMODULE += xtimer
   USEMODULE += event
+  ifeq ($(BOARD),native)
+  USEMODULE += event_timeout
+  endif
   USEMODULE += lvgl_core
   USEMODULE += lvgl_objx
   USEMODULE += lvgl_misc
@@ -14,7 +17,9 @@ ifneq (,$(filter gui,$(USEMODULE)))
 endif
 
 ifneq (,$(filter controller,$(USEMODULE)))
+  ifneq ($(BOARD),native)
   FEATURES_REQUIRED += periph_wdt
+  endif
 endif
 
 ifneq (,$(filter hal,$(USEMODULE)))

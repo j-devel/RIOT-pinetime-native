@@ -38,7 +38,11 @@ static uint16_t _battery_ewma(controller_battery_t *cbatt, uint16_t measurement)
 static void _battery_measure_event(event_t *event)
 {
     controller_battery_t *cbatt = container_of(event, controller_battery_t, ev);
+#ifdef USE_BOARD_NATIVE
+    uint16_t measurement = 0;
+#else
     uint16_t measurement = hal_battery_read_voltage();
+#endif
     uint16_t new_average = _battery_ewma(cbatt, measurement);
 
     mutex_lock(&cbatt->lock);

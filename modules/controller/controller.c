@@ -18,7 +18,9 @@
 #include "gui.h"
 #include "ts_event.h"
 
+#ifndef USE_BOARD_NATIVE
 #include "periph/wdt.h"
+#endif
 
 #ifdef MODULE_BLEMAN
 #include "bleman.h"
@@ -142,6 +144,7 @@ static void _submit_events(controller_t *controller, controller_event_t event)
     }
 }
 
+#ifndef USE_BOARD_NATIVE
 static void _controller_wdt_kick(controller_t *controller)
 {
     if (CONTROLLER_WDT_RESET_ON_BUTTON_PRESS) {
@@ -153,7 +156,9 @@ static void _controller_wdt_kick(controller_t *controller)
 
     wdt_kick();
 }
+#endif
 
+#ifndef USE_BOARD_NATIVE
 static void _controller_wdt_setup(controller_t *controller)
 {
     /* Timeout + half a second for good measure :) */
@@ -161,6 +166,7 @@ static void _controller_wdt_setup(controller_t *controller)
     wdt_start();
     _controller_wdt_kick(controller);
 }
+#endif
 
 #ifdef MODULE_BLEMAN
 static void _bleman_control_event_cb(bleman_t *bleman, struct ble_gap_event *event,
@@ -188,36 +194,60 @@ static void *_control_thread(void* arg)
 {
     controller_t *controller = arg;
     controller->pid = thread_getpid();
+
+#ifndef USE_BOARD_NATIVE
     _controller_wdt_setup(controller);
+#endif
+
     event_queue_init(&_control.queue);
-	controller_time_init();
-	controller_battery_init(controller, &controller->batt);
+
+#ifndef USE_BOARD_NATIVE
+    controller_time_init();
+#endif
+
+    controller_battery_init(controller, &controller->batt);
+
 #ifdef MODULE_BLEMAN
     bleman_add_event_handler(bleman_get(), &controller->handler,
                              _bleman_control_event_cb, controller);
 #endif
 
+#ifndef USE_BOARD_NATIVE
     controller->reset_reason = hal_get_reset_reason();
-
     LOG_INFO("[controller]: MCU reset reason %02x\n", controller->reset_reason);
+#endif
 
     widget_init_installed();
 
     _switch_face_idx(0, GUI_SCROLL_DIRECTION_NONE);
+
     while(1)
     {
         thread_flags_t flags = thread_flags_wait_any(
             THREAD_FLAG_EVENT | CONTROLLER_THREAD_FLAG_TICK | CONTROLLER_THREAD_FLAG_BLUETOOTH
             );
+        LOG_INFO("@@ [controller] after thread_flags_wait_any()\n");
+
         /* Tick event from the RTC */
         if (flags & CONTROLLER_THREAD_FLAG_TICK) {
+#ifndef USE_BOARD_NATIVE
             _controller_wdt_kick(controller);
             controller_update_time(controller);
             _submit_events(controller, CONTROLLER_EVENT_TICK);
         }
+#else
+            assert(false); /* shouldn't come here */
+        }
+
+        LOG_INFO("@@ [controller] emulating RTC tick for 'every' event!!\n");
+        controller_update_time_native(controller);
+        _submit_events(controller, CONTROLLER_EVENT_TICK);
+#endif
+
         if (flags & CONTROLLER_THREAD_FLAG_BLUETOOTH) {
             _submit_events(controller, CONTROLLER_EVENT_BLUETOOTH);
         }
+
         if (flags & THREAD_FLAG_EVENT) {
             event_t *ev = NULL;
             while ((ev = event_get(&controller->queue))) {

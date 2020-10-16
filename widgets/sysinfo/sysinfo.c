@@ -7,14 +7,18 @@
  */
 
 #include <stdint.h>
-#include "hal.h"
+#ifndef USE_BOARD_NATIVE
+  #include "hal.h"
+#endif
 #include "log.h"
 #include "lvgl.h"
 #include "gui.h"
 #include "gui/theme.h"
 #include "controller.h"
 #include "kernel_defines.h"
-#include "bleman.h"
+#ifndef USE_BOARD_NATIVE
+  #include "bleman.h"
+#endif
 #include "xtimer.h"
 #include "gui.h"
 
@@ -31,6 +35,7 @@ static const char *sysinfo_on_battery = "On battery";
 static const char *sysinfo_charging = "Charging";
 static const char *sysinfo_charging_complete = "Fully charged";
 
+#ifndef USE_BOARD_NATIVE
 static const char *sysinfo_reset_reason[] = {
     [0] = "Reset pin",
     [1] = "Watchdog",
@@ -41,6 +46,7 @@ static const char *sysinfo_reset_reason[] = {
     [18] = "Debugger",
     [19] = "NFC",
 };
+#endif
 
 static const char *sysinfo_label = ""
     "#" LABEL_LABEL_COLOR "RIOT version:# \n %.14s\n"
@@ -61,10 +67,12 @@ static inline sysinfo_widget_t *_from_widget(widget_t *widget)
     return container_of(widget, sysinfo_widget_t, widget);
 }
 
+/* @@ unused?
 static inline sysinfo_widget_t *active_widget(void)
 {
     return &sysinfo_widget;
 }
+*/
 
 static void _sysinfo_set_label(sysinfo_widget_t *sysinfo)
 {
@@ -115,8 +123,10 @@ static lv_obj_t *_sysinfo_screen_create(sysinfo_widget_t *sysinfo)
 
 static void _update_power_stats(sysinfo_widget_t *sysinfo)
 {
+#ifndef USE_BOARD_NATIVE
     sysinfo->powered = hal_battery_is_powered();
     sysinfo->charging = hal_battery_is_charging();
+#endif
     sysinfo->battery_voltage = controller_get_battery_voltage(controller_get());
 }
 
@@ -177,8 +187,13 @@ static int sysinfo_event(widget_t *widget, controller_event_t event)
     if (event == CONTROLLER_EVENT_TICK) {
         sysinfo->uptime = xtimer_now_usec64() / US_PER_SEC;
         _update_power_stats(sysinfo);
+#ifndef USE_BOARD_NATIVE
         sysinfo->reset_string = sysinfo_reset_reason[controller_get()->reset_reason];
+#endif
+        sysinfo->reset_string = "N/A";
+#ifndef USE_BOARD_NATIVE
         sysinfo->temperature = hal_get_internal_temp();
+#endif
     }
     widget_release_control_lock(widget);
     return 0;
@@ -188,12 +203,14 @@ static int sysinfo_gui_event(widget_t *widget, int event)
 {
     sysinfo_widget_t *sysinfo = _from_widget(widget);
     switch (event) {
+#ifndef USE_BOARD_NATIVE
         case GUI_EVENT_GESTURE_UP:
             lv_page_scroll_ver(sysinfo->page, -SYSINFO_SCROLL_DISTANCE);
             break;
         case GUI_EVENT_GESTURE_DOWN:
             lv_page_scroll_ver(sysinfo->page, SYSINFO_SCROLL_DISTANCE);
             break;
+#endif
         case GUI_EVENT_GESTURE_LEFT:
             controller_action_submit_input_action(&sysinfo->widget,
                                                   CONTROLLER_ACTION_WIDGET_LEAVE, NULL);

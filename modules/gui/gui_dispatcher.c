@@ -12,7 +12,12 @@
 #include "thread.h"
 #include "gui.h"
 #include "gui/dispatcher.h"
-#include "hal.h"
+#ifdef USE_BOARD_NATIVE
+  #define HAL_DISPLAY_ROWS_VISIBLE            240 // shim
+  #define HAL_DISPLAY_ROWS_TOTAL              320 // shim
+#else
+  #include "hal.h"
+#endif
 
 #define DISPATCHER_THREAD_NAME    "gui_disp"
 #define DISPATCHER_THREAD_PRIO    5
@@ -101,6 +106,7 @@ static void _gui_dispatcher_display_flush(event_t *event)
     /* Use two transactions when the render is split over the screen end */
     if (y2_shift < y1_shift) {
         /* Requires 2 transmissions */
+#ifndef USE_BOARD_NATIVE
         hal_display_flush(hal_display_get_context(),
                           flush_event->x1,
                           flush_event->x2,
@@ -114,16 +120,20 @@ static void _gui_dispatcher_display_flush(event_t *event)
                           0,
                           y2_shift,
                           flush_event->map + pix_offset);
+#endif
     }
     else {
+#ifndef USE_BOARD_NATIVE
         hal_display_flush(hal_display_get_context(),
                           flush_event->x1,
                           flush_event->x2,
                           y1_shift,
                           y2_shift,
                           flush_event->map);
+#endif
     }
 
+#ifndef USE_BOARD_NATIVE
     if (flush_event->direction == GUI_SCROLL_DIRECTION_DOWN) {
         uint16_t new_shift = (gui->offset + flush_event->y2 + 1) % HAL_DISPLAY_ROWS_TOTAL;
         uint16_t scroll = (HAL_DISPLAY_ROWS_TOTAL - new_shift + HAL_DISPLAY_ROWS_VISIBLE) % HAL_DISPLAY_ROWS_TOTAL;
@@ -133,6 +143,7 @@ static void _gui_dispatcher_display_flush(event_t *event)
         uint16_t scroll = (HAL_DISPLAY_ROWS_TOTAL - y1_shift) % HAL_DISPLAY_ROWS_TOTAL;
         hal_display_scroll(scroll);
     }
+#endif
 
     flush_event->used = 0;
     lv_disp_flush_ready(flush_event->drv);

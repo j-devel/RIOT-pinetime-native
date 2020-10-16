@@ -10,7 +10,9 @@
 #define _APP_GUI_H
 
 #include <stdint.h>
-#include "hal_input.h"
+#ifndef USE_BOARD_NATIVE
+  #include "hal_input.h"
+#endif
 #include "lvgl.h"
 #include "event.h"
 #include "event/timeout.h"
@@ -85,6 +87,15 @@ typedef struct {
     bool used;
     gui_scroll_direction_t direction;
 } gui_flush_event_t;
+
+#ifdef USE_BOARD_NATIVE
+// @@ shim (from modules/hal/include/hal_input.h)
+typedef struct {
+    uint16_t x;
+    uint16_t y;
+    int gesture;
+} hal_input_coord_t;
+#endif
 
 typedef struct {
     lv_disp_buf_t disp_buf;

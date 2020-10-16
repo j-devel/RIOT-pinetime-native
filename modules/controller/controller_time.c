@@ -6,14 +6,24 @@
  * directory for more details.
  */
 
+#ifdef USE_BOARD_NATIVE
+#include <time.h>
+#endif
+
 #include "cpu.h"
+
+#ifndef USE_BOARD_NATIVE
 #include "nrf_clock.h"
+#endif
+
 #include "controller.h"
 #include "controller/time.h"
 
+#ifndef USE_BOARD_NATIVE
 #define CONTROLLER_TIME_RTC     NRF_RTC2
 #define CONTROLLER_TIME_ISR     isr_rtc2
 #define CONTROLLER_TIME_IRQn    RTC2_IRQn
+#endif
 
 #define COUNTER_MASK            0x00FFFFFF /* 24 bit counter */
 
@@ -31,10 +41,12 @@
 #define TM_YEAR_BASE    1900
 #define isleap(y) ((((y) % 4) == 0 && ((y) % 100) != 0) || ((y) % 400) == 0)
 
+#ifndef USE_BOARD_NATIVE
 static const unsigned mon_lengths[2][MONSPERYEAR] = {
 	{ 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 },
 	{ 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }
 };
+#endif
 
 static const char *mon_short_names[MONSPERYEAR + 1] = {
     [0] = "Inv",
@@ -68,6 +80,7 @@ static const char *mon_long_names[MONSPERYEAR + 1] = {
     "December",
 };
 
+#ifndef USE_BOARD_NATIVE
 void controller_time_rtc_inc_compare(void)
 {
     /* TODO: add fracs compensation support */
@@ -112,6 +125,7 @@ void CONTROLLER_TIME_ISR(void)
     }
     cortexm_isr_end();
 }
+#endif
 
 const char *controller_time_month_get_long_name(controller_time_spec_t *time)
 {
@@ -125,6 +139,33 @@ const char *controller_time_month_get_short_name(controller_time_spec_t *time)
     return mon_short_names[time->month];
 }
 
+void controller_time_set_time(controller_t *controller, controller_time_spec_t *time)
+{
+    /* TODO: take fractionals into account */
+    memcpy(&controller->cur_time, time, sizeof(controller_time_spec_t));
+}
+
+const controller_time_spec_t *controller_time_get_time(controller_t *controller)
+{
+    return &controller->cur_time;
+}
+
+#ifdef USE_BOARD_NATIVE
+void controller_update_time_native(controller_t *controller)
+{
+    struct tm now;
+    time_t clock = time(NULL);
+    localtime_r(&clock, &now);
+
+    controller_time_spec_t *ts = &controller->cur_time;
+    ts->second = now.tm_sec;
+    ts->minute = now.tm_min;
+    ts->hour = now.tm_hour;
+    ts->dayofmonth = now.tm_mday;
+    ts->month = now.tm_mon + 1;
+    ts->year = now.tm_year + 1900;
+}
+#else
 void controller_update_time(controller_t *controller)
 {
     uint32_t counter = CONTROLLER_TIME_RTC->COUNTER;
@@ -157,17 +198,6 @@ void controller_update_time(controller_t *controller)
     }
 }
 
-void controller_time_set_time(controller_t *controller, controller_time_spec_t *time)
-{
-    /* TODO: take fractionals into account */
-    memcpy(&controller->cur_time, time, sizeof(controller_time_spec_t));
-}
-
-const controller_time_spec_t *controller_time_get_time(controller_t *controller)
-{
-    return &controller->cur_time;
-}
-
 void controller_time_init(void)
 {
     controller_time_rtc_stop();
@@ -180,4 +210,4 @@ void controller_time_init(void)
 	controller_time_rtc_inc_compare();
 	controller_time_rtc_start();
 }
-
+#endif

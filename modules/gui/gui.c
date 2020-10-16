@@ -15,8 +15,10 @@
 #include "lvgl.h"
 #include "board.h"
 #include "xtimer.h"
-#include "hal.h"
-#include "hal_input.h"
+#ifndef USE_BOARD_NATIVE
+  #include "hal.h"
+  #include "hal_input.h"
+#endif
 #include "gui.h"
 #include "gui/dispatcher.h"
 #include "gui/theme.h"
@@ -24,6 +26,10 @@
 #include "widget.h"
 #include "event/timeout.h"
 #include "msg.h"
+
+#ifdef USE_BOARD_NATIVE
+  #include "lvgl_sdl.h"
+#endif
 
 #define LVGL_THREAD_NAME    "lvgl"
 #define LVGL_THREAD_PRIO    6
@@ -93,9 +99,61 @@ static void _gui_widget_send_event(gui_t *gui, gui_event_t ev)
     }
 }
 
+#ifdef USE_BOARD_NATIVE
+static int16_t hack_count = 0;
+static bool hack_send_click(lv_indev_data_t *data) {
+    if (hack_count < 30) {
+        hack_count++;
+    } else {
+        return false;
+    }
+
+    if (hack_count == 10 || hack_count == 20) {
+        LOG_INFO("@@ [gui] hack_send_click(): 🐭 sending a click!!\n");
+        data->point.x = 120;
+        data->point.y = 180;
+        data->state = LV_INDEV_STATE_PR;
+        return true;
+    }
+    return false;
+}
+#endif
+
 static bool _input_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
 {
     gui_t *gui = &_gui;
+
+#ifdef USE_BOARD_NATIVE
+    // Hack to automatically go back to `home_time_widget`
+    if (hack_send_click(data)) return false;
+
+    bool ret = lvgl_sdl_mouse_read(drv, data);
+
+    gui_event_t ev = GUI_EVENT_NONE;
+    switch (lvgl_sdl_detect_gesture(data)) {
+        case LVGL_SDL_GESTURE_SLIDE_UP:
+            ev = GUI_EVENT_GESTURE_UP;
+            break;
+        case LVGL_SDL_GESTURE_SLIDE_DOWN:
+            ev = GUI_EVENT_GESTURE_DOWN;
+            break;
+        case LVGL_SDL_GESTURE_SLIDE_LEFT:
+            ev = GUI_EVENT_GESTURE_LEFT;
+            break;
+        case LVGL_SDL_GESTURE_SLIDE_RIGHT:
+            ev = GUI_EVENT_GESTURE_RIGHT;
+            break;
+        default:
+            break;
+    }
+    if (ev != GUI_EVENT_NONE) {
+        LOG_INFO("@@ _input_read_cb(): gesture ev: %d\n", ev);
+    }
+
+    _gui_widget_send_event(gui, ev);
+
+    return ret;
+#else
     data->point.x = gui->coord.x;
     data->point.y = gui->coord.y;
     data->state = LV_INDEV_STATE_REL;
@@ -105,8 +163,10 @@ static bool _input_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
         data->state = LV_INDEV_STATE_PR;
     }
     return false;
+#endif
 }
 
+#ifndef USE_BOARD_NATIVE
 static void _gui_read_input(gui_t *gui)
 {
     int res = hal_input_get_measurement(hal_input_get_context(), &gui->coord);
@@ -119,6 +179,7 @@ static void _gui_read_input(gui_t *gui)
         gui->send_press = 1;
     }
     gui_event_t ev = GUI_EVENT_NONE;
+
     switch (gui->coord.gesture) {
         case CST816S_GESTURE_SLIDE_UP:
             ev = GUI_EVENT_GESTURE_UP;
@@ -135,18 +196,22 @@ static void _gui_read_input(gui_t *gui)
         default:
             break;
     }
+
     if (!(ev == GUI_EVENT_NONE)) {
         /* Manually signal activity to LVGL */
         lv_disp_trig_activity(gui->display);
         _gui_widget_send_event(gui, ev);
     }
 }
+#endif
 
+#ifndef USE_BOARD_NATIVE
 static void _input_cb(cst816s_t *dev, void *arg)
 {
     gui_t *gui = arg;
     thread_flags_set((thread_t*)thread_get(gui->pid), GUI_THREAD_FLAG_INPUT_EV);
 }
+#endif
 
 /* Switch the screen displayed */
 static void _switch_widget_draw(gui_t *gui, widget_t *widget, uint16_t type)
@@ -171,6 +236,9 @@ static void _switch_widget_draw(gui_t *gui, widget_t *widget, uint16_t type)
 
 static void _gui_update_widget_draw(gui_t *gui)
 {
+    // LOG_INFO("@@[gui]: gui->active_widget: %p\n", gui->active_widget);
+    assert(gui->active_widget); // @@
+
     if (widget_is_dirty(gui->active_widget)) {
         LOG_DEBUG("[GUI]: widget is dirty, updating\n");
         widget_update_draw(gui->active_widget);
@@ -191,12 +259,14 @@ int lvgl_thread_create(void)
 {
     gui_t *gui = &_gui;
 
+#ifndef USE_BOARD_NATIVE
     if (hal_input_init(_input_cb, gui) == 0) {
         LOG_INFO("[cst816s]: OK!\n");
     }
     else {
         LOG_ERROR("[cst816s]: Device initialization failed\n");
     }
+#endif
 
     lv_disp_drv_t disp_drv;
     lv_disp_buf_init(&gui->disp_buf, _buf1, _buf2, GUI_BUF_SIZE);
@@ -204,7 +274,11 @@ int lvgl_thread_create(void)
 
     gui_dispatcher_thread_create(gui);
     disp_drv.buffer = &gui->disp_buf;
+#ifdef USE_BOARD_NATIVE
+    disp_drv.flush_cb = lvgl_sdl_monitor_flush;
+#else
     disp_drv.flush_cb = gui_dispatcher_display_flush_cb;
+#endif
 
     gui->display = lv_disp_drv_register(&disp_drv);
 
@@ -231,7 +305,9 @@ static void _gui_screen_on(gui_t *gui)
     if (gui->display_on == false) {
         gui->display_on = true;
         _gui_lvgl_update(gui);
+#ifndef USE_BOARD_NATIVE
         hal_display_on();
+#endif
     }
 }
 
@@ -254,6 +330,7 @@ static void _gui_button_irq(void *arg)
 
 static void _gui_button_event(event_t *event)
 {
+    LOG_INFO("@@ [gui] called handler: _gui_button_event()\n");
     gui_t *gui = container_of(event, gui_t, button_press);
     _gui_screen_on(gui);
     LOG_INFO("[gui] Button press event\n");
@@ -264,13 +341,21 @@ static void _gui_button_event(event_t *event)
 
 static void _gui_screen_timeout(event_t *event)
 {
+    LOG_INFO("@@ [gui] called handler: _gui_screen_timeout()\n");
     gui_t *gui = container_of(event, gui_t, screen_timeout);
     uint32_t inactive_time = lv_disp_get_inactive_time(NULL);
+
+#ifdef USE_BOARD_NATIVE
+    LOG_INFO("@@ [gui] lv_disp_get_inactive_time(): %u\n", inactive_time);
+#endif
+
     if (inactive_time  >= CONFIG_GUI_SCREEN_TIMEOUT) {
         LOG_INFO("[gui] Screen off after timeout\n");
         /* Turn screen off */
         gui->display_on = false;
+#ifndef USE_BOARD_NATIVE
         hal_display_off();
+#endif
     }
     else {
         /* Touch event within the screen timeout, resubmit event with new timeout */
@@ -282,6 +367,7 @@ static void _gui_screen_timeout(event_t *event)
 
 static void _gui_lvgl_update(gui_t *gui)
 {
+    // LOG_INFO("@@ [gui] _gui_lvgl_update gui->display_on: %d\n", gui->display_on);
     if (gui->display_on) {
         xtimer_set(&gui->lvgl_loop, CONFIG_GUI_LVGL_LOOP_TIME);
         _gui_update_widget_draw(gui);
@@ -328,14 +414,15 @@ static void *_lvgl_thread(void* arg)
     event_timeout_init(&gui->screen_timeout_ev, &gui->queue, &gui->screen_timeout);
 
     /* Configure the button */
+#ifndef USE_BOARD_NATIVE
     hal_set_button_cb(_gui_button_irq, gui);
+#endif
 
     event_timeout_set(&gui->screen_timeout_ev, CONFIG_GUI_SCREEN_TIMEOUT);
     /* Bootstrap lvgl loop events */
     xtimer_set(&gui->lvgl_loop, CONFIG_GUI_LVGL_LOOP_TIME);
-    while(1)
-    {
-
+    while (1) {
+        // LOG_INFO("@@ [gui] before thread_flags_wait_any()\n");
         thread_flags_t flag = thread_flags_wait_any(
             GUI_THREAD_FLAG_IDLE |
             GUI_THREAD_FLAG_WAKE |
@@ -344,8 +431,10 @@ static void *_lvgl_thread(void* arg)
             THREAD_FLAG_EVENT |
             THREAD_FLAG_MSG_WAITING
             );
+        // LOG_INFO("@@ [gui] after thread_flags_wait_any()\n");
         /* External thread to GUI messages */
         if (flag & THREAD_FLAG_MSG_WAITING) {
+            LOG_INFO("@@ [gui] flag: THREAD_FLAG_MSG_WAITING\n");
             msg_t msg;
             while (msg_try_receive(&msg) == 1) {
                 _gui_handle_msg(gui, &msg);
@@ -353,20 +442,33 @@ static void *_lvgl_thread(void* arg)
         }
         /* Internal state machine based events */
         if (flag & THREAD_FLAG_EVENT) {
+            LOG_INFO("@@ [gui] flag: THREAD_FLAG_EVENT\n");
             event_t *ev = NULL;
             /* Handle all events */
             while ((ev = event_get(&gui->queue))) {
                 ev->handler(ev);
             }
+
+#ifdef USE_BOARD_NATIVE
+            LOG_INFO("@@ [gui] hack: force screen awake!!\n");
+            _gui_button_irq(gui);
+#endif
         }
         if (flag & GUI_THREAD_FLAG_LVGL_HANDLE) {
+            // LOG_INFO("@@ [gui] flag: GUI_THREAD_FLAG_LVGL_HANDLE\n");
             _gui_lvgl_update(gui);
         }
         if (flag & GUI_THREAD_FLAG_INPUT_EV) {
-            puts("Input EV flag");
+#ifdef USE_BOARD_NATIVE
+            assert(false); // this calling path to be not used
+#else
+            // LOG_INFO("@@ [gui] flag: GUI_THREAD_FLAG_INPUT_EV\n");
+            // puts("Input EV flag");
             _gui_read_input(gui);
+#endif
         }
         if (flag & GUI_THREAD_FLAG_IDLE) {
+            LOG_INFO("@@ [gui] flag: GUI_THREAD_FLAG_IDLE\n");
             /* idle handling */
         }
     }
