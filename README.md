@@ -1,4 +1,38 @@
+# RIOT-pinetime-native
+
+![image](https://j-devel.github.io/RIOT-pinetime-native/media/bosmoment-native.png)
+
+This is a RIOT `BOARD=native` port of the [Bosmoment-style Pinetime firmware](https://github.com/bosmoment/PineTime-apps).
+
+Notable changes in this `native` port include:
+
+- `nrf52` MCU specific modules (`bleman`, `hal`, `storage`, etc.) are disabled.
+- POSIX `localtime_r()` is used to query current local time.
+- A custom RIOT package [`lvgl-sdl`](https://github.com/j-devel/RIOT-pkg-lvgl-sdl) is used instead of the `ili9341` driver module.
+
+Thanks: [@bergzand](https://github.com/bergzand) for the original https://github.com/bosmoment/PineTime-apps project
+
+## Build
+
+```
+$ make init      # initialize the RIOT submodule
+$ make           # build with MCU "native"
+```
+
+## Build for MCU
+
+You can still build firmware targeting `nrf52` MCU from within the same codebase.
+
+This can be suitable for 1) developing LVGL-based firmware GUI in native, and
+then 2) rebuilding firmware that's actually deployed in MCU hardware.
+
+```
+$ make pinetime  # build with MCU "nrf52"
+```
+
+<!--
 [![Build Status](https://api.cirrus-ci.com/github/bosmoment/PineTime-apps.svg)](https://cirrus-ci.com/github/bosmoment/PineTime-apps)
+-->
 
 # Bosmoment-style Pinetime firmware applications
 
