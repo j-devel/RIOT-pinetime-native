@@ -2,6 +2,8 @@
 
 ![image](https://j-devel.github.io/RIOT-pinetime-native/media/bosmoment-native.png)
 
+🎬 [video](https://j-devel.github.io/RIOT-pinetime-native/media/bosmoment-native.mp4)
+
 This is a RIOT `BOARD=native` port of the [Bosmoment-style Pinetime firmware](https://github.com/bosmoment/PineTime-apps).
 
 Notable changes in this `native` port include:
